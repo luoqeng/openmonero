@@ -144,6 +144,9 @@ public:
     bool
     select(uint64_t account_id, vector<T>& selected_data);
 
+    bool
+    select_txs_for_height(uint64_t account_id, uint64_t start_height, uint64_t stop_height, vector<XmrTransaction>& selected_data);
+
     template <typename T>
     bool
     update(T const& orginal_row, T const& new_row);

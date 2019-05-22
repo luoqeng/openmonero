@@ -32,7 +32,7 @@ handel_::operator()(const shared_ptr< Session > session)
 
 
 OpenMoneroRequests::OpenMoneroRequests(
-        shared_ptr<MySqlAccounts> _acc, 
+        shared_ptr<MySqlAccounts> _acc,
         shared_ptr<CurrentBlockchainStatus> _current_bc_status):
     xmr_accounts {_acc}, current_bc_status {_current_bc_status}
 {
@@ -62,7 +62,7 @@ OpenMoneroRequests::login(const shared_ptr<Session> session, const Bytes & body)
     bool create_accountt {true};
 
     // client sends generated_localy as true
-    // for new accounts, and false for 
+    // for new accounts, and false for
     // adding existing accounts (i.e., importing wallet)
     bool generated_locally {false};
 
@@ -187,6 +187,20 @@ OpenMoneroRequests::get_address_txs(
         return;
     }
 
+    uint64_t start_height   {0};
+    uint64_t stop_height    {0};
+    if (j_request.count("start_height") > 0 )
+        start_height = j_request["start_height"];
+    if (j_request.count("stop_height") > 0 )
+        stop_height = j_request["stop_height"];
+    if (start_height > stop_height) {
+        cerr << "OpenMoneroRequests::get_address_txs: start_height > stop_height" << endl;
+
+        j_response["status"] = "error";
+        j_response["reason"] = "start_height > stop_height";
+        session_close(session, j_response);
+    }
+
     // make hash of the submited viewkey. we only store
     // hash of viewkey in database, not acctual viewkey.
     string viewkey_hash = make_hash(view_key);
@@ -215,6 +229,11 @@ OpenMoneroRequests::get_address_txs(
         // we cant fetch an account's txs using only address.
         // knowlage of the viewkey is also needed.
 
+        if (start_height == 0)
+            start_height = acc.start_height;
+        if (stop_height == 0)
+            stop_height = acc.scanned_block_height;
+
         uint64_t total_received {0};
         uint64_t total_received_unlocked {0};
 
@@ -227,7 +246,8 @@ OpenMoneroRequests::get_address_txs(
 
         vector<XmrTransaction> txs;
 
-        xmr_accounts->select(acc.id.data, txs);
+        //xmr_accounts->select(acc.id.data, txs);
+        xmr_accounts->select_txs_for_height(acc.id.data, start_height, stop_height, txs);
 
         if (xmr_accounts->select_txs_for_account_spendability_check(
                     acc.id.data, txs))
@@ -244,7 +264,7 @@ OpenMoneroRequests::get_address_txs(
                         {"height"         , tx.height},
                         {"mixin"          , tx.mixin},
                         {"payment_id"     , tx.payment_id},
-                        {"unlock_time"    , tx.unlock_time},                  
+                        {"unlock_time"    , tx.unlock_time},
                         {"total_sent"     , 0}, // to be field when checking for spent_outputs below
                         {"total_received" , std::to_string(tx.total_received)},
                         {"timestamp"      , static_cast<uint64_t>(tx.timestamp)*1000},
@@ -303,7 +323,7 @@ OpenMoneroRequests::get_address_txs(
 
     } // if (current_bc_status->search_thread_exist(xmr_address))
     else
-    {        
+    {
         j_response = json {{"status", "error"},
                            {"reason", "Search thread does not exist."}};
 
@@ -599,7 +619,7 @@ OpenMoneroRequests::get_unspent_outs(
 
     j_response = json  {
             {"amount" , "0"},          // total value of the outputs
-            {"fork_version", 
+            {"fork_version",
                 current_bc_status->get_hard_fork_version()},
             {"outputs", json::array()} // list of outputs
                                        // exclude those without require
@@ -673,55 +693,55 @@ OpenMoneroRequests::get_unspent_outs(
 
                     uint64_t global_amount_index = out.global_index;
 
-                    // default case. it will cover 
+                    // default case. it will cover
                     // rct types 1 (Full) and 2 (Simple)
-                    // rct types explained here: 
+                    // rct types explained here:
                     // https://monero.stackexchange.com/questions/3348/what-are-3-types-of-ring-ct-transactions
                     string rct = out.get_rct();
 
-                    // based on 
+                    // based on
                     // https://github.com/mymonero/mymonero-app-js/issues/277#issuecomment-469395825
 
                     if (!tx.is_rct)
                     {
-                        // point 1: null/undefined/empty: 
+                        // point 1: null/undefined/empty:
                         // non-RingCT output (i.e, from version 1 tx)
                         // covers all pre-ringct outputs
                         rct = "";
                     }
-                    else    
+                    else
                     {
                         // for RingCT:
-                                                     
+
                        if (tx.rct_type == 0)
                        {
                        // coinbase rct txs require speciall treatment
-                       // point 2: string "coinbase" (length 8): 
+                       // point 2: string "coinbase" (length 8):
                        // RingCT coinbase output
-                       
+
                         rct = "coinbase";
                        }
                        else if (tx.rct_type == 3)
-                       {                               
-                           // point 3: string length 192: non-coinbase RingCT 
+                       {
+                           // point 3: string length 192: non-coinbase RingCT
                            // version 1 output with 256-bit amount and mask
                            // rct type 3 is Booletproof
-                           
+
                            rct = out.rct_outpk + out.rct_mask + out.rct_amount;
                        }
                        else if (tx.rct_type == 4)
                        {
-                           // point 4 string length 80: 
-                           // non-coinbase RingCT version 2 
+                           // point 4 string length 80:
+                           // non-coinbase RingCT version 2
                            // output 64 bit amount
                            // rct type 4 is Booletproof2
-                           
+
                            rct = out.rct_outpk + out.rct_amount.substr(0,16);
                        }
                     }
 
-                    //cout << "tx hash: " << tx.hash  << ", rtc: " << rct 
-                    //     << ", rtc size: " << rct.size()  
+                    //cout << "tx hash: " << tx.hash  << ", rtc: " << rct
+                    //     << ", rtc size: " << rct.size()
                     //     << ", decrypted mask: " << out.rct_mask
                     //     << endl;
 
@@ -876,8 +896,8 @@ OpenMoneroRequests::get_random_outs(
                              + std::get<1>(rct_field)  // rct_mask
                              + std::get<2>(rct_field); // rct_amount
 
-                
-    
+
+
 
                 json out_details {
                         {"global_index", out.global_amount_index},
@@ -959,7 +979,7 @@ OpenMoneroRequests::submit_raw_tx(
         OMERROR << error_msg;
 
         session_close(session, j_response,
-                      UNPROCESSABLE_ENTITY, 
+                      UNPROCESSABLE_ENTITY,
                       error_msg);
         return;
     }
@@ -1294,7 +1314,7 @@ OpenMoneroRequests::import_recent_wallet_request(
     }
     catch (json::exception const& e)
     {
-        OMERROR << xmr_address.substr(0,6) 
+        OMERROR << xmr_address.substr(0,6)
                 << ": json exception: " << e.what();
         session_close(session, j_response, UNPROCESSABLE_ENTITY,
                       e.what());
@@ -1321,7 +1341,7 @@ OpenMoneroRequests::import_recent_wallet_request(
         session_close(session, j_response);
         return;
     }
-    
+
     // get account from mysql db if exists
     auto xmr_account = select_account(xmr_address, view_key);
 
@@ -1369,7 +1389,7 @@ OpenMoneroRequests::import_recent_wallet_request(
                                 updated_acc.scanned_block_height))
             {
 
-                OMERROR << xmr_address.substr(0,6) 
+                OMERROR << xmr_address.substr(0,6)
                         << ": updating searched_blk_no failed!" << endl;
                 j_response["Error"]  = "Updating searched_blk_no failed!";
             }
@@ -1587,16 +1607,18 @@ OpenMoneroRequests::get_tx(
     // but its worth double checking
     // the mysql data, and also allows for new
     // implementation in the frontend.
-    if (current_bc_status->get_xmr_address_viewkey(
+    XmrAccount acc;
+    if (login_and_start_search_thread(xmr_address, view_key, acc, j_response)
+            && current_bc_status->get_xmr_address_viewkey(
                 xmr_address, address_info, viewkey))
     {
-    
-        auto identifier = make_identifier(tx, 
+
+        auto identifier = make_identifier(tx,
                         make_unique<Output>(&address_info, &viewkey));
 
         identifier.identify();
-    
-        auto const& outputs_identified 
+
+        auto const& outputs_identified
                 = identifier.get<Output>()->get();
 
         auto total_received = calc_total_xmr(outputs_identified);
@@ -1617,7 +1639,7 @@ OpenMoneroRequests::get_tx(
         // get account id of the user asking for tx details.
 
         // a placeholder for exciting or new account data
-        XmrAccount acc;
+        //XmrAccount acc;
 
         // select this account if its existing one
         if (xmr_accounts->select(xmr_address, acc))
@@ -1698,14 +1720,14 @@ OpenMoneroRequests::get_tx(
                     // of our outputs
                     // and inputs in a given tx.
 
-                    auto identifier = make_identifier(tx, 
-                                    make_unique<Input>(&address_info, &viewkey, 
-                                                       &known_outputs_keys, 
+                    auto identifier = make_identifier(tx,
+                                    make_unique<Input>(&address_info, &viewkey,
+                                                       &known_outputs_keys,
                                                        &mcore_addapter));
                     identifier.identify();
-    
-                    
-                    auto const& inputs_identfied 
+
+
+                    auto const& inputs_identfied
                         = identifier.get<Input>()->get();
 
                     json j_spent_outputs = json::array();
@@ -1983,6 +2005,13 @@ OpenMoneroRequests::parse_request(
     {
         j_request = body_to_json(body);
 
+        if (j_request.count("address") > 0 && j_request.count("view_key") == 0) {
+            auto it = current_bc_status->get_bc_setup().viewkey_index.find(j_request["address"]);
+            if (it != current_bc_status->get_bc_setup().viewkey_index.end()) {
+                j_request["view_key"] = it->second;
+            }
+        }
+
         // parsing was successful
         // now check if all required values are there.
 
@@ -2022,7 +2051,7 @@ OpenMoneroRequests::create_account(
 
     if (xmr_accounts->select(xmr_address, *acc))
     {
-        // if acc already exist, just return 
+        // if acc already exist, just return
         // existing one
         return acc;
     }
@@ -2070,7 +2099,7 @@ OpenMoneroRequests::create_account(
 
     // add acc database id
     acc->id = acc_id;
-    
+
     // add also the view_key into acc object. its needs to be done
     // as we dont store viewkeys in the database
     acc->viewkey = view_key;
@@ -2082,7 +2111,7 @@ boost::optional<XmrAccount>
 OpenMoneroRequests::select_account(
         string const& xmr_address,
         string const& view_key,
-        bool create_if_notfound) const 
+        bool create_if_notfound) const
 {
     boost::optional<XmrAccount> acc = XmrAccount{};
 
@@ -2118,9 +2147,9 @@ OpenMoneroRequests::select_account(
     return acc;
 }
 
-bool 
+bool
 OpenMoneroRequests::make_search_thread(
-        XmrAccount& acc) const 
+        XmrAccount& acc) const
 {
     if (current_bc_status->search_thread_exist(acc.address))
     {
@@ -2136,7 +2165,7 @@ OpenMoneroRequests::make_search_thread(
     }
     catch (std::exception const& e)
     {
-        OMERROR << acc.address.substr(0,6) 
+        OMERROR << acc.address.substr(0,6)
             + ": txSearch construction faild.";
         return false;
     }
@@ -2177,7 +2206,7 @@ OpenMoneroRequests::select_payment(
      // paymnet record created. so new
      // paymnet will be created
      if (xmr_payments.empty())
-     {                  
+     {
          OMINFO << xmr_account.address.substr(0,6) +
                     ": no payment record found!";
 

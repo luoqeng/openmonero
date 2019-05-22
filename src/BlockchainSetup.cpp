@@ -71,6 +71,7 @@ BlockchainSetup::parse_addr_and_viewkey()
 void
 BlockchainSetup::get_blockchain_path()
 {
+    json addresses_json;
     switch (net_type)
     {
         case network_type::MAINNET:
@@ -81,6 +82,8 @@ BlockchainSetup::get_blockchain_path()
                     = config_json["wallet_import"]["mainnet"]["address"];
             import_payment_viewkey_str
                     = config_json["wallet_import"]["mainnet"]["viewkey"];
+            addresses_json
+                    = config_json["wallet_import"]["mainnet"]["addresses"];
             break;
         case network_type::TESTNET:
             blockchain_path = config_json["blockchain-path"]["testnet"]
@@ -90,6 +93,8 @@ BlockchainSetup::get_blockchain_path()
                     = config_json["wallet_import"]["testnet"]["address"];
             import_payment_viewkey_str
                     = config_json["wallet_import"]["testnet"]["viewkey"];
+            addresses_json
+                    = config_json["wallet_import"]["testnet"]["addresses"];
             break;
         case network_type::STAGENET:
             blockchain_path = config_json["blockchain-path"]["stagenet"]
@@ -99,10 +104,17 @@ BlockchainSetup::get_blockchain_path()
                     = config_json["wallet_import"]["stagenet"]["address"];
             import_payment_viewkey_str
                     = config_json["wallet_import"]["stagenet"]["viewkey"];
+            addresses_json
+                    = config_json["wallet_import"]["stagenet"]["addresses"];
             break;
         default:
             throw std::runtime_error("Invalid netowork type provided "
                                + std::to_string(static_cast<int>(net_type)));
+    }
+
+    for (json::iterator it = addresses_json.begin(); it != addresses_json.end(); ++it) {
+          std::cout << it.key() << " : " << it.value() << "\n";
+          viewkey_index[it.key()] = it.value();
     }
 
     if (!xmreg::get_blockchain_path(blockchain_path, net_type))
@@ -170,7 +182,7 @@ BlockchainSetup::_init()
             = config_json["wallet_import"]["fee"];
     mysql_ping_every
             = seconds {config_json["mysql_ping_every_seconds"]};
-    blockchain_treadpool_size 
+    blockchain_treadpool_size
             = config_json["blockchain_treadpool_size"];
 
     get_blockchain_path();

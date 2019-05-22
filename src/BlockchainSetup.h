@@ -61,6 +61,7 @@ public:
 
     address_parse_info import_payment_address;
     secret_key         import_payment_viewkey;
+    map<string, string>         viewkey_index;
 
     void
     parse_addr_and_viewkey();
