@@ -268,7 +268,8 @@ OpenMoneroRequests::get_address_txs(
                         {"total_sent"     , 0}, // to be field when checking for spent_outputs below
                         {"total_received" , std::to_string(tx.total_received)},
                         {"timestamp"      , static_cast<uint64_t>(tx.timestamp)*1000},
-                        {"mempool"        , false} // tx in database are never from mempool
+                        {"mempool"        , false}, // tx in database are never from mempool
+                        {"no_confirmations" , get_current_blockchain_height() - tx.height}
                 };
 
                 vector<XmrInput> inputs;
@@ -362,6 +363,7 @@ OpenMoneroRequests::get_address_txs(
                 //     << j_tx["total_received"] << endl;
 
                 j_tx["id"] = ++last_tx_id_db;
+                j_tx["no_confirmations"] = 0;
 
                 total_received_mempool += boost::lexical_cast<uint64_t>(
                             j_tx["total_received"].get<string>());
@@ -1427,7 +1429,8 @@ OpenMoneroRequests::get_tx(
     json j_response;
     json j_request;
 
-    vector<string> requested_values {"address" , "view_key", "tx_hash"};
+    //vector<string> requested_values {"address" , "view_key", "tx_hash"};
+    vector<string> requested_values {"tx_hash"};
 
     if (!parse_request(body, requested_values, j_request, j_response))
     {
@@ -1441,8 +1444,10 @@ OpenMoneroRequests::get_tx(
 
     try
     {
-        xmr_address = j_request["address"];
-        view_key    = j_request["view_key"];
+        if (j_request.count("address") > 0 && j_request.count("view_key") > 0) {
+            xmr_address = j_request["address"];
+            view_key    = j_request["view_key"];
+        }
         tx_hash_str = j_request["tx_hash"];
     }
     catch (json::exception const& e)
