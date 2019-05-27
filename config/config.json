@@ -10,7 +10,7 @@
   {
     "_comment" : "if paths are empty, default Monero paths will be used",
     "mainnet"  : "",
-    "testnet"  : "",
+    "testnet"  : "/home/luoqeng/dev/blockchain/monero/monero/build/Linux/master/debug/bin/testnet/node_01/testnet/lmdb",
     "stagenet" : ""
   },
   "database" :
@@ -20,7 +20,7 @@
     "port"     : 3306,
     "dbname"   : "openmonero",
     "user"     : "root",
-    "password" : "root"
+    "password" : "mypass"
   },
   "database_test":
   {
@@ -38,7 +38,12 @@
     "testnet" :
     {
       "address" : "9tzmPMTViHYM3z6NAgQni1Qm1Emzxy5hQFibPgWD3LVTAz91yok5Eni1pH6zKhBHzpTU15GZooPHSGHXFvFuXEdmEG2sWAZ",
-      "viewkey" : "ae6184287ca791609844f140b8502ccfa2223c04c8699cf31fcd0af1f1d0be08"
+      "viewkey" : "ae6184287ca791609844f140b8502ccfa2223c04c8699cf31fcd0af1f1d0be08",
+
+      "addresses" : {
+          "9wq792k9sxVZiLn66S3Qzv8QfmtcwkdXgM5cWGsXAPxoQeMQ79md51PLPCijvzk1iHbuHi91pws5B7iajTX9KTtJ4bh2tCh" : "f747f4a4838027c9af80e6364a941b60c538e67e9ea198b6ec452b74c276de06",
+          "A2rgGdM78JEQcxEUsi761WbnJWsFRCwh1PkiGtGnUUcJTGenfCr5WEtdoXezutmPiQMsaM4zJbpdH5PMjkCt7QrXAhV8wDB" : "3913021405cfdeb4648c6e92b98456a9b503d9ff99b3d86c9a79fdd917130108"
+      }
     },
     "mainnet" :
     {

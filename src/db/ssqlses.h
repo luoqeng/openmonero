@@ -116,6 +116,10 @@ struct XmrTransaction : public Transactions, Table
         SELECT * FROM `Transactions` WHERE `id` = (%0q)
     )";
 
+    static constexpr const char* SELECT_STMT4 = R"(
+        SELECT * FROM `Transactions` WHERE `account_id` = (%0q) AND `height` >= (%1q) AND `height` < (%2q)
+    )";
+
     static constexpr const char* EXIST_STMT = R"(
         SELECT * FROM `Transactions` WHERE `account_id` = (%0q) AND `hash` = (%1q)
     )";
@@ -125,17 +129,17 @@ struct XmrTransaction : public Transactions, Table
     )";
 
     static constexpr const char* INSERT_STMT = R"(
-        INSERT IGNORE INTO `Transactions` (`hash`, `prefix_hash`, `tx_pub_key`, `account_id`, 
+        INSERT IGNORE INTO `Transactions` (`hash`, `prefix_hash`, `tx_pub_key`, `account_id`,
                                            `blockchain_tx_id`,
                                            `total_received`, `total_sent`, `unlock_time`,
                                            `height`, `coinbase`, `is_rct`, `rct_type`,
                                            `spendable`,
                                            `payment_id`, `mixin`, `timestamp`)
                                 VALUES (%0q, %1q, %2q, %3q,
-                                        %4q, 
-                                        %5q, %6q, %7q, 
+                                        %4q,
+                                        %5q, %6q, %7q,
                                         %8q, %9q, %10q, %11q,
-                                        %12q, 
+                                        %12q,
                                         %13q, %14q, %15q);
     )";
 

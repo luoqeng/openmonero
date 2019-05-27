@@ -375,6 +375,35 @@ MySqlAccounts::select(uint64_t account_id, vector<T>& selected_data)
     return false;
 }
 
+bool
+MySqlAccounts::select_txs_for_height(uint64_t account_id, uint64_t start_height, uint64_t stop_height, vector<XmrTransaction>& selected_data)
+{
+    try
+    {
+        conn->check_if_connected();
+
+        Query query = conn->query(XmrTransaction::SELECT_STMT4);
+
+        query.parse();
+
+        selected_data.clear();
+
+        query.storein(selected_data, account_id, start_height, stop_height);
+
+        // this is confusing. So I get false from this method
+        // when this is empty and when there is some exception!
+        return !selected_data.empty();
+        //return true;
+    }
+    catch (std::exception const& e)
+    {
+        MYSQL_EXCEPTION_MSG(e);
+        //throw  e;
+    }
+
+    return false;
+}
+
 template
 bool MySqlAccounts::select<XmrAccount>(uint64_t account_id,
         vector<XmrAccount>& selected_data);
