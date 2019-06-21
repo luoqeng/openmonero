@@ -822,7 +822,10 @@ CurrentBlockchainStatus::start_tx_search_thread(
     }
     catch (const std::exception& e)
     {
-        OMERROR << "Faild created a search thread: " << e.what();
+        OMERROR << acc.address.substr(0,6)
+                << ": Faild created a search thread: " 
+                << e.what();
+
         return false;
     }
 
@@ -894,6 +897,19 @@ CurrentBlockchainStatus::search_thread_exist(const string& address)
     // from other methods, which do use mutex.
     // so if you put mutex here, you will get into deadlock.
     return searching_threads.count(address) > 0;
+}
+
+bool
+CurrentBlockchainStatus::search_thread_exist(
+        string const& address, 
+        string const& viewkey)
+{
+    std::lock_guard<std::mutex> lck (searching_threads_map_mtx);
+
+    if (!search_thread_exist(address))
+        return false;
+
+    return get_search_thread(address).get_viewkey() == viewkey;
 }
 
 bool
