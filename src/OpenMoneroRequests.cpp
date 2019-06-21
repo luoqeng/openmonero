@@ -631,18 +631,18 @@ OpenMoneroRequests::get_unspent_outs(
 
     // select this account if its existing one
 
+    // populate acc and check view_key
+    if (!login_and_start_search_thread(xmr_address, view_key, acc, j_response))
+    {
+        // some error with loggin in or search thread start
+        session_close(session, j_response);
+        return;
+    }
+
     // for this to continue, search thread must have already been
     // created and still exisits.
     if (current_bc_status->search_thread_exist(xmr_address))
     {
-        // populate acc and check view_key
-        if (!login_and_start_search_thread(xmr_address, view_key, acc, j_response))
-        {
-            // some error with loggin in or search thread start
-            session_close(session, j_response);
-            return;
-        }
-
         uint64_t total_outputs_amount {0};
 
 //        uint64_t current_blockchain_height
