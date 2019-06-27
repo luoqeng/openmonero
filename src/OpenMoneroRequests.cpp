@@ -243,12 +243,22 @@ OpenMoneroRequests::get_address_txs(
         return;
     }
 
+    bool is_unlock {false};
+    if (j_request.count("is_unlock") > 0 )
+        is_unlock = j_request["is_unlock"];
+
+    bool is_output {false};
+    if (j_request.count("is_output") > 0 )
+        is_output = j_request["is_output"];
+
     uint64_t start_height   {0};
-    uint64_t stop_height    {0};
     if (j_request.count("start_height") > 0 )
         start_height = j_request["start_height"];
+
+    uint64_t stop_height    {0};
     if (j_request.count("stop_height") > 0 )
         stop_height = j_request["stop_height"];
+
     if (start_height > stop_height) {
         cerr << "OpenMoneroRequests::get_address_txs: start_height > stop_height" << endl;
 
@@ -318,8 +328,21 @@ OpenMoneroRequests::get_address_txs(
     {
         json j_txs = json::array();
 
+        json j_outputs = json::array();
+
         for (XmrTransaction const& tx: txs)
         {
+            // we skip over locked outputs
+            // as they cant be spent anyway.
+            // thus no reason to return them to the frontend
+            // for constructing a tx.
+
+            if (!is_unlock && !current_bc_status->is_tx_unlocked(
+                        tx.unlock_time, tx.height))
+            {
+                continue;
+            }
+
             json j_tx {
                     {"id"             , tx.blockchain_tx_id},
                     {"coinbase"       , bool {tx.coinbase}},
@@ -377,12 +400,18 @@ OpenMoneroRequests::get_address_txs(
 
             j_txs.push_back(j_tx);
 
+            if (is_output) {
+                uint64_t total_outputs_amount;
+                get_outputs(tx, total_outputs_amount, j_outputs, 0);
+            }
+
         } // for (XmrTransaction tx: txs)
 
         j_response["total_received"]          = std::to_string(total_received);
         j_response["total_received_unlocked"] = std::to_string(total_received_unlocked);
 
         j_response["transactions"] = j_txs;
+        j_response["outputs"] = j_outputs;
 
     } // if (xmr_accounts->select_txs_for_ac
 
@@ -618,7 +647,6 @@ OpenMoneroRequests::get_address_info(
     session->close( OK, response_body, response_headers);
 }
 
-
 void
 OpenMoneroRequests::get_unspent_outs(
         const shared_ptr< Session > session,
@@ -715,127 +743,7 @@ OpenMoneroRequests::get_unspent_outs(
 
             for (XmrTransaction& tx: txs)
             {
-                // we skip over locked outputs
-                // as they cant be spent anyway.
-                // thus no reason to return them to the frontend
-                // for constructing a tx.
-
-                if (!current_bc_status->is_tx_unlocked(
-                            tx.unlock_time, tx.height))
-                {
-                    continue;
-                }
-
-
-                vector<XmrOutput> outs;
-
-                if (!xmr_accounts->select_for_tx(tx.id.data, outs))
-                {
-                    continue;
-                }
-
-                for (XmrOutput &out: outs)
-                {
-                    // skip outputs considered as dust
-                    if (out.amount < dust_threshold)
-                    {
-                        continue;
-                    }
-
-                    // need to check for rct commintment
-                    // coinbase ringct txs dont have
-                    // rct filed in them. Thus
-                    // we need to make them.
-
-                    uint64_t global_amount_index = out.global_index;
-
-                    // default case. it will cover
-                    // rct types 1 (Full) and 2 (Simple)
-                    // rct types explained here:
-                    // https://monero.stackexchange.com/questions/3348/what-are-3-types-of-ring-ct-transactions
-                    string rct = out.get_rct();
-
-                    // based on
-                    // https://github.com/mymonero/mymonero-app-js/issues/277#issuecomment-469395825
-
-                    if (!tx.is_rct)
-                    {
-                        // point 1: null/undefined/empty:
-                        // non-RingCT output (i.e, from version 1 tx)
-                        // covers all pre-ringct outputs
-                        rct = "";
-                    }
-                    else
-                    {
-                        // for RingCT:
-
-                       if (tx.rct_type == 0)
-                       {
-                       // coinbase rct txs require speciall treatment
-                       // point 2: string "coinbase" (length 8):
-                       // RingCT coinbase output
-
-                        rct = "coinbase";
-                       }
-                       else if (tx.rct_type == 3)
-                       {
-                           // point 3: string length 192: non-coinbase RingCT
-                           // version 1 output with 256-bit amount and mask
-                           // rct type 3 is Booletproof
-
-                           rct = out.rct_outpk + out.rct_mask + out.rct_amount;
-                       }
-                       else if (tx.rct_type == 4)
-                       {
-                           // point 4 string length 80:
-                           // non-coinbase RingCT version 2
-                           // output 64 bit amount
-                           // rct type 4 is Booletproof2
-
-                           rct = out.rct_outpk + out.rct_amount.substr(0,16);
-                       }
-                    }
-
-                    //cout << "tx hash: " << tx.hash  << ", rtc: " << rct
-                    //     << ", rtc size: " << rct.size()
-                    //     << ", decrypted mask: " << out.rct_mask
-                    //     << endl;
-
-                    json j_out{
-                            {"amount"          , std::to_string(out.amount)},
-                            {"public_key"      , out.out_pub_key},
-                            {"index"           , out.out_index},
-                            {"global_index"    , out.global_index},
-                            {"rct"             , rct},
-                            {"tx_id"           , out.tx_id},
-                            {"tx_hash"         , tx.hash},
-                            {"tx_prefix_hash"  , tx.prefix_hash},
-                            {"tx_pub_key"      , tx.tx_pub_key},
-                            {"timestamp"       , static_cast<uint64_t>(
-                                        out.timestamp*1e3)},
-                            {"height"          , tx.height},
-                            {"spend_key_images", json::array()}
-                    };
-
-                    vector<XmrInput> ins;
-
-                    if (xmr_accounts->select_inputs_for_out(
-                                out.id.data, ins))
-                    {
-                        json& j_ins = j_out["spend_key_images"];
-
-                        for (XmrInput& in: ins)
-                        {
-                            j_ins.push_back(in.key_image);
-                        }
-                    }
-
-                    j_outputs.push_back(j_out);
-
-                    total_outputs_amount += out.amount;
-
-                }  //for (XmrOutput &out: outs)
-
+                get_outputs(tx, total_outputs_amount, j_outputs, dust_threshold);
             } // for (XmrTransaction& tx: txs)
 
         } //  if (xmr_accounts->select_txs(acc.id, txs))
@@ -1822,6 +1730,10 @@ OpenMoneroRequests::get_tx(
 
                     } // if (xmr_accounts->select_inputs_
 
+                    uint64_t total_outputs_amount;
+                    json j_outputs = json::array();
+                    get_outputs(xmr_tx, total_outputs_amount, j_outputs, 0);
+                    j_response["outputs"] = j_outputs;
                 }  // if (xmr_accounts->tx_exists(acc.id
 
             } // if (!tx_in_mempool)
@@ -1939,6 +1851,20 @@ OpenMoneroRequests::get_version(
     session->close( OK, response_body, response_headers);
 }
 
+void
+OpenMoneroRequests::get_dynamic_base_fee_estimate(
+        const shared_ptr< Session > session,
+        const Bytes & body)
+{
+    (void) body;
+    json j_response {
+        {"status", "success"},
+        {"per_byte_fee", current_bc_status->get_dynamic_base_fee_estimate()}
+    };
+    session_close(session, j_response);
+}
+
+
 
 shared_ptr<Resource>
 OpenMoneroRequests::make_resource(
@@ -2017,6 +1943,138 @@ uint64_t
 OpenMoneroRequests::get_current_blockchain_height() const
 {
     return current_bc_status->get_current_blockchain_height();
+}
+
+bool
+OpenMoneroRequests::get_outputs(
+        const XmrTransaction& tx,
+        uint64_t& total_outputs_amount,
+        json& j_outputs,
+        uint64_t dust_threshold) {
+    // we skip over locked outputs
+    // as they cant be spent anyway.
+    // thus no reason to return them to the frontend
+    // for constructing a tx.
+
+    if (!current_bc_status->is_tx_unlocked(
+                tx.unlock_time, tx.height))
+    {
+        return false;
+    }
+
+
+    vector<XmrOutput> outs;
+
+    if (!xmr_accounts->select_for_tx(tx.id.data, outs))
+    {
+        return false;
+    }
+
+    bool is_out = false;
+    for (XmrOutput &out: outs)
+    {
+        // skip outputs considered as dust
+        if (out.amount < dust_threshold)
+        {
+            continue;
+        }
+
+        // need to check for rct commintment
+        // coinbase ringct txs dont have
+        // rct filed in them. Thus
+        // we need to make them.
+
+        uint64_t global_amount_index = out.global_index;
+
+        // default case. it will cover
+        // rct types 1 (Full) and 2 (Simple)
+        // rct types explained here:
+        // https://monero.stackexchange.com/questions/3348/what-are-3-types-of-ring-ct-transactions
+        string rct = out.get_rct();
+
+        // based on
+        // https://github.com/mymonero/mymonero-app-js/issues/277#issuecomment-469395825
+
+        if (!tx.is_rct)
+        {
+            // point 1: null/undefined/empty:
+            // non-RingCT output (i.e, from version 1 tx)
+            // covers all pre-ringct outputs
+            rct = "";
+        }
+        else
+        {
+            // for RingCT:
+
+            if (tx.rct_type == 0)
+            {
+                // coinbase rct txs require speciall treatment
+                // point 2: string "coinbase" (length 8):
+                // RingCT coinbase output
+
+                rct = "coinbase";
+            }
+            else if (tx.rct_type == 3)
+            {
+                // point 3: string length 192: non-coinbase RingCT
+                // version 1 output with 256-bit amount and mask
+                // rct type 3 is Booletproof
+
+                rct = out.rct_outpk + out.rct_mask + out.rct_amount;
+            }
+            else if (tx.rct_type == 4)
+            {
+                // point 4 string length 80:
+                // non-coinbase RingCT version 2
+                // output 64 bit amount
+                // rct type 4 is Booletproof2
+
+                rct = out.rct_outpk + out.rct_amount.substr(0,16);
+            }
+        }
+
+        //cout << "tx hash: " << tx.hash  << ", rtc: " << rct
+        //     << ", rtc size: " << rct.size()
+        //     << ", decrypted mask: " << out.rct_mask
+        //     << endl;
+
+        json j_out{
+            {"amount"          , std::to_string(out.amount)},
+                {"public_key"      , out.out_pub_key},
+                {"index"           , out.out_index},
+                {"global_index"    , out.global_index},
+                {"rct"             , rct},
+                {"tx_id"           , out.tx_id},
+                {"tx_hash"         , tx.hash},
+                {"tx_prefix_hash"  , tx.prefix_hash},
+                {"tx_pub_key"      , tx.tx_pub_key},
+                {"timestamp"       , static_cast<uint64_t>(
+                        out.timestamp*1e3)},
+                {"height"          , tx.height},
+                {"spend_key_images", json::array()}
+        };
+
+        vector<XmrInput> ins;
+
+        if (xmr_accounts->select_inputs_for_out(
+                    out.id.data, ins))
+        {
+            json& j_ins = j_out["spend_key_images"];
+
+            for (XmrInput& in: ins)
+            {
+                j_ins.push_back(in.key_image);
+            }
+        }
+
+        j_outputs.push_back(j_out);
+        is_out = true;
+
+        total_outputs_amount += out.amount;
+
+    }  //for (XmrOutput &out: outs)
+
+    return is_out;
 }
 
 bool

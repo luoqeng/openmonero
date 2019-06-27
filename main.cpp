@@ -60,7 +60,7 @@ if (*help_opt)
 auto monero_log_level  =
         *(opts.get_option<size_t>("monero-log-level"));
 
-auto verbose_level = 
+auto verbose_level =
         *(opts.get_option<size_t>("verbose"));
 
 if (monero_log_level < 1 || monero_log_level > 4)
@@ -123,7 +123,7 @@ bool stagenet         = *stagenet_opt;
 bool do_not_relay     = *do_not_relay_opt;
 
 if (testnet && stagenet)
-{   
+{
     OMERROR << "testnet and stagenet cannot be specified at the same time!";
     return EXIT_FAILURE;
 }
@@ -163,7 +163,7 @@ if (bc_setup.blockchain_treadpool_size > 0)
 if (threads_no > 100)
 {
     threads_no = 100;
-    OMWARN << "Requested Thread Pool size " 
+    OMWARN << "Requested Thread Pool size "
         << threads_no << " is greater than 100!."
             " Overwriting to 100!" ;
 }
@@ -269,6 +269,7 @@ MAKE_RESOURCE(import_wallet_request);
 MAKE_RESOURCE(import_recent_wallet_request);
 MAKE_RESOURCE(get_tx);
 MAKE_RESOURCE(get_version);
+MAKE_RESOURCE(get_dynamic_base_fee_estimate);
 
 // restbed service
 Service service;
@@ -285,6 +286,7 @@ service.publish(import_wallet_request);
 service.publish(import_recent_wallet_request);
 service.publish(get_tx);
 service.publish(get_version);
+service.publish(get_dynamic_base_fee_estimate);
 
 OMINFO << "JSON API endpoints published";
 

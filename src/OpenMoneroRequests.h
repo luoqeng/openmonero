@@ -81,7 +81,7 @@ public:
      */
     void
     login(const shared_ptr<Session> session, const Bytes & body);
-    
+
     void
     ping(const shared_ptr<Session> session, const Bytes & body);
 
@@ -111,6 +111,9 @@ public:
 
     void
     get_version(const shared_ptr< Session > session, const Bytes & body);
+
+    void
+    get_dynamic_base_fee_estimate(const shared_ptr< Session > session, const Bytes & body);
 
     shared_ptr<Resource>
     make_resource(function< void (OpenMoneroRequests&, const shared_ptr< Session >, const Bytes& ) > handle_func,
@@ -157,7 +160,7 @@ private:
                    string const& view_key,
                    bool generated_locally = true) const;
 
-    bool 
+    bool
     make_search_thread(XmrAccount& acc) const;
 
     boost::optional<XmrAccount>
@@ -168,12 +171,19 @@ private:
     boost::optional<XmrPayment>
     select_payment(XmrAccount const& xmr_account) const;
 
-     void
+    void
     session_close(
             const shared_ptr< Session > session,
             json& j_response,
             int return_code = OK,
             string error_msg = "") const;
+
+    bool
+    get_outputs(
+            const XmrTransaction& tx,
+            uint64_t& total_outputs_amount,
+            json & j_outputs, uint64_t
+            dust_threshold = 1000000000);
 };
 
 
