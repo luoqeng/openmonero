@@ -337,8 +337,7 @@ OpenMoneroRequests::get_address_txs(
             // thus no reason to return them to the frontend
             // for constructing a tx.
 
-            if (!is_unlock && !current_bc_status->is_tx_unlocked(
-                        tx.unlock_time, tx.height))
+            if (!is_unlock && ! tx.unlock_time > CRYPTONOTE_MAX_BLOCK_NUMBER)
             {
                 continue;
             }
