@@ -265,6 +265,7 @@ OpenMoneroRequests::get_address_txs(
         j_response["status"] = "error";
         j_response["reason"] = "start_height > stop_height";
         session_close(session, j_response);
+        return;
     }
 
     // make hash of the submited viewkey. we only store
@@ -337,7 +338,8 @@ OpenMoneroRequests::get_address_txs(
             // thus no reason to return them to the frontend
             // for constructing a tx.
 
-            if (!is_unlock && ! tx.unlock_time > CRYPTONOTE_MAX_BLOCK_NUMBER)
+            if (!is_unlock
+                    && CurrentBlockchainStatus::is_tx_unlock_type(tx.unlock_time, tx.height))
             {
                 continue;
             }
@@ -742,6 +744,12 @@ OpenMoneroRequests::get_unspent_outs(
 
             for (XmrTransaction& tx: txs)
             {
+                if (!current_bc_status->is_tx_unlocked(
+                            tx.unlock_time, tx.height))
+                {
+                    continue;
+                }
+
                 get_outputs(tx, total_outputs_amount, j_outputs, dust_threshold);
             } // for (XmrTransaction& tx: txs)
 
@@ -1690,6 +1698,15 @@ OpenMoneroRequests::get_tx(
                 if (xmr_accounts->tx_exists(
                             acc.id.data, tx_hash_str, xmr_tx))
                 {
+                    if (CurrentBlockchainStatus::is_tx_unlock_type(xmr_tx.unlock_time, xmr_tx.height)) {
+                        cerr << "OpenMoneroRequests::get_tx Lock type transactions are not supported" << endl;
+
+                        j_response["status"] = "error";
+                        j_response["reason"] = "Lock type transactions are not supported";
+                        session_close(session, j_response);
+                        return;
+                    }
+
                     j_response["payment_id"] = xmr_tx.payment_id;
                     j_response["timestamp"]
                             = static_cast<uint64_t>(xmr_tx.timestamp*1e3);
@@ -1954,13 +1971,6 @@ OpenMoneroRequests::get_outputs(
     // as they cant be spent anyway.
     // thus no reason to return them to the frontend
     // for constructing a tx.
-
-    if (!current_bc_status->is_tx_unlocked(
-                tx.unlock_time, tx.height))
-    {
-        return false;
-    }
-
 
     vector<XmrOutput> outs;
 
